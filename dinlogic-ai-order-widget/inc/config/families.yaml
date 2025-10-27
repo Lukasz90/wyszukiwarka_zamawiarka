@@ -1,0 +1,18 @@
+contactor:
+  synonyms:
+    - stycznik
+    - contactor
+  attributes:
+    - name: current
+      unit: A
+      type: number
+    - name: poles
+      type: int
+circuit_breaker:
+  synonyms:
+    - wyłącznik
+    - breaker
+  attributes:
+    - name: current
+      unit: A
+      type: number
