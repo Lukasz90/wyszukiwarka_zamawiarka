@@ -1,23 +1,20 @@
 <?php
-namespace Dinlogic\AIW;
-
-use WP_Error;
-use WP_REST_Request;
-use WP_REST_Response;
-use WP_REST_Server;
-
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-class REST {
+class Dinlogic_AIW_REST {
     const ROUTE_NAMESPACE = 'aiw/v1';
 
-    /** @var Search */
-    protected $search;
+    /** @var Dinlogic_AIW_Search */
+    private $search;
 
-    public function __construct( Search $search = null ) {
-        $this->search = $search ? $search : new Search();
+    /** @var Dinlogic_AIW_Parser */
+    private $parser;
+
+    public function __construct( Dinlogic_AIW_Search $search, Dinlogic_AIW_Parser $parser ) {
+        $this->search = $search;
+        $this->parser = $parser;
     }
 
     public function init() {
@@ -29,14 +26,23 @@ class REST {
             self::ROUTE_NAMESPACE,
             '/search',
             array(
-                'args'                 => array(
-                    'q'        => array( 'type' => 'string' ),
-                    'page'     => array( 'type' => 'integer', 'default' => 1 ),
-                    'per_page' => array( 'type' => 'integer', 'default' => 10 ),
-                ),
-                'permission_callback' => '__return_true',
-                'callback'            => array( $this, 'handle_search' ),
                 'methods'             => WP_REST_Server::READABLE,
+                'callback'            => array( $this, 'handle_search' ),
+                'permission_callback' => '__return_true',
+                'args'                => array(
+                    'q'        => array(
+                        'sanitize_callback' => 'sanitize_text_field',
+                        'required'          => false,
+                    ),
+                    'page'     => array(
+                        'validate_callback' => 'is_numeric',
+                        'default'           => 1,
+                    ),
+                    'per_page' => array(
+                        'validate_callback' => 'is_numeric',
+                        'default'           => 10,
+                    ),
+                ),
             )
         );
 
@@ -44,19 +50,9 @@ class REST {
             self::ROUTE_NAMESPACE,
             '/cart/add',
             array(
-                'permission_callback' => array( $this, 'guard_post' ),
+                'methods'             => WP_REST_Server::CREATABLE,
                 'callback'            => array( $this, 'handle_cart_add' ),
-                'methods'             => WP_REST_Server::CREATABLE,
-            )
-        );
-
-        register_rest_route(
-            self::ROUTE_NAMESPACE,
-            '/lines/add',
-            array(
-                'permission_callback' => array( $this, 'guard_post' ),
-                'callback'            => array( $this, 'handle_lines_add' ),
-                'methods'             => WP_REST_Server::CREATABLE,
+                'permission_callback' => array( $this, 'check_nonce' ),
             )
         );
 
@@ -64,9 +60,19 @@ class REST {
             self::ROUTE_NAMESPACE,
             '/voice/parse',
             array(
-                'permission_callback' => array( $this, 'guard_post' ),
-                'callback'            => array( $this, 'handle_voice_parse' ),
                 'methods'             => WP_REST_Server::CREATABLE,
+                'callback'            => array( $this, 'handle_voice_parse' ),
+                'permission_callback' => array( $this, 'check_nonce' ),
+            )
+        );
+
+        register_rest_route(
+            self::ROUTE_NAMESPACE,
+            '/lines/add',
+            array(
+                'methods'             => WP_REST_Server::CREATABLE,
+                'callback'            => array( $this, 'handle_lines_add' ),
+                'permission_callback' => array( $this, 'check_nonce' ),
             )
         );
 
@@ -74,158 +80,156 @@ class REST {
             self::ROUTE_NAMESPACE,
             '/ocr/extract',
             array(
-                'permission_callback' => array( $this, 'guard_post' ),
-                'callback'            => array( $this, 'handle_ocr_extract' ),
                 'methods'             => WP_REST_Server::CREATABLE,
+                'callback'            => array( $this, 'handle_ocr_extract' ),
+                'permission_callback' => array( $this, 'check_nonce' ),
             )
         );
     }
 
-    public function guard_post( $request ) {
-        $nonce = $request->get_header( 'X-WP-Nonce' );
-
-        if ( ! $nonce ) {
-            $params = $request->get_params();
-            $nonce  = isset( $params['_wpnonce'] ) ? $params['_wpnonce'] : '';
-        }
-
-        if ( ! $nonce || ! wp_verify_nonce( $nonce, 'wp_rest' ) ) {
-            return new WP_Error( 'invalid_nonce', __( 'Invalid security token.', 'dinlogic-ai-order-widget' ), array( 'status' => 403 ) );
-        }
-
-        return current_user_can( 'read' );
-    }
-
     public function handle_search( WP_REST_Request $request ) {
-        $q        = (string) $request->get_param( 'q' );
-        $page     = sanitize_int( $request->get_param( 'page' ), 1 );
-        $per_page = max( 1, min( 50, sanitize_int( $request->get_param( 'per_page' ), 10 ) ) );
+        $query    = $request->get_param( 'q' );
+        $page     = $request->get_param( 'page' );
+        $per_page = $request->get_param( 'per_page' );
 
-        $results = $this->search->search( $q, $page, $per_page );
+        $results = $this->search->search( $query, $page, $per_page );
 
-        return new WP_REST_Response( $results );
+        return rest_ensure_response( $results );
     }
 
     public function handle_cart_add( WP_REST_Request $request ) {
-        $params     = $request->get_json_params();
-        $product_id = isset( $params['product_id'] ) ? (int) $params['product_id'] : 0;
-        $qty        = isset( $params['qty'] ) ? max( 1, (int) $params['qty'] ) : 1;
-        $variation  = isset( $params['variation'] ) && is_array( $params['variation'] ) ? $params['variation'] : array();
+        $product_id = absint( $request->get_param( 'product_id' ) );
+        $qty        = max( 1, absint( $request->get_param( 'qty' ) ) );
+        $variation  = $request->get_param( 'variation' );
 
         if ( ! $product_id ) {
-            return new WP_Error( 'invalid_product', __( 'Product ID is required.', 'dinlogic-ai-order-widget' ), array( 'status' => 400 ) );
+            return new WP_Error( 'invalid_product', __( 'Brak produktu.', 'dinlogic-ai-order-widget' ), array( 'status' => 400 ) );
         }
 
-        $product = wc_get_product( $product_id );
-
-        if ( ! $product ) {
-            return new WP_Error( 'not_found', __( 'Product not found.', 'dinlogic-ai-order-widget' ), array( 'status' => 404 ) );
+        if ( null === WC()->cart ) {
+            wc_load_cart();
         }
 
-        $cart_item_key = false;
+        if ( empty( WC()->cart ) ) {
+            return new WP_Error( 'cart_unavailable', __( 'Koszyk niedostępny.', 'dinlogic-ai-order-widget' ), array( 'status' => 500 ) );
+        }
 
-        if ( $product->is_type( 'variation' ) ) {
-            $parent        = wc_get_product( $product->get_parent_id() );
-            $cart_item_key = WC()->cart->add_to_cart( $parent->get_id(), $qty, $product->get_id(), $variation );
-        } elseif ( $product->is_type( 'variable' ) ) {
-            return new WP_Error( 'missing_variation', __( 'Variation attributes required.', 'dinlogic-ai-order-widget' ), array( 'status' => 409 ) );
+        $added = false;
+
+        if ( ! empty( $variation ) && is_array( $variation ) ) {
+            $added = WC()->cart->add_to_cart( $product_id, $qty, 0, $variation );
         } else {
-            $cart_item_key = WC()->cart->add_to_cart( $product_id, $qty );
+            $added = WC()->cart->add_to_cart( $product_id, $qty );
         }
 
-        if ( ! $cart_item_key ) {
-            return new WP_Error( 'cart_error', __( 'Unable to add product to cart.', 'dinlogic-ai-order-widget' ), array( 'status' => 500 ) );
+        if ( false === $added ) {
+            return new WP_Error( 'add_failed', __( 'Nie udało się dodać produktu.', 'dinlogic-ai-order-widget' ), array( 'status' => 400 ) );
         }
 
-        return new WP_REST_Response( array( 'cart_item_key' => $cart_item_key ) );
-    }
-
-    public function handle_lines_add( WP_REST_Request $request ) {
-        $params = $request->get_json_params();
-
-        if ( empty( $params['lines'] ) || ! is_array( $params['lines'] ) ) {
-            return new WP_Error( 'invalid_lines', __( 'Lines payload must be an array.', 'dinlogic-ai-order-widget' ), array( 'status' => 400 ) );
-        }
-
-        $results = array();
-
-        foreach ( $params['lines'] as $index => $line ) {
-            $product_id = isset( $line['product_id'] ) ? (int) $line['product_id'] : 0;
-            $qty        = isset( $line['qty'] ) ? max( 1, (int) $line['qty'] ) : 1;
-            $variation  = isset( $line['variation'] ) && is_array( $line['variation'] ) ? $line['variation'] : array();
-
-            if ( ! $product_id ) {
-                $results[] = array(
-                    'index' => $index,
-                    'status' => 'error',
-                    'error'  => __( 'Missing product ID.', 'dinlogic-ai-order-widget' ),
-                );
-                continue;
-            }
-
-            $product = wc_get_product( $product_id );
-
-            if ( ! $product ) {
-                $results[] = array(
-                    'index' => $index,
-                    'status' => 'error',
-                    'error'  => __( 'Product not found.', 'dinlogic-ai-order-widget' ),
-                );
-                continue;
-            }
-
-            if ( $product->is_type( 'variable' ) && empty( $variation ) ) {
-                $results[] = array(
-                    'index' => $index,
-                    'status' => 'error',
-                    'error'  => __( 'Missing variation attributes.', 'dinlogic-ai-order-widget' ),
-                );
-                continue;
-            }
-
-            $parent_id    = $product->is_type( 'variation' ) ? $product->get_parent_id() : $product->get_id();
-            $variation_id = $product->is_type( 'variation' ) ? $product->get_id() : 0;
-
-            $cart_item_key = WC()->cart->add_to_cart( $parent_id, $qty, $variation_id, $variation );
-
-            $results[] = array(
-                'index'         => $index,
-                'status'        => $cart_item_key ? 'success' : 'error',
-                'cart_item_key' => $cart_item_key,
-            );
-        }
-
-        return new WP_REST_Response( array( 'results' => $results ) );
+        return rest_ensure_response(
+            array(
+                'ok'         => true,
+                'cart_count' => WC()->cart->get_cart_contents_count(),
+            )
+        );
     }
 
     public function handle_voice_parse( WP_REST_Request $request ) {
-        $params     = $request->get_json_params();
-        $transcript = isset( $params['transcript'] ) ? (string) $params['transcript'] : '';
+        $transcript = (string) $request->get_param( 'transcript' );
+        $cleaned    = $this->parser->dedupe_text( $transcript );
 
-        if ( '' === trim( $transcript ) ) {
-            return new WP_Error( 'invalid_transcript', __( 'Transcript cannot be empty.', 'dinlogic-ai-order-widget' ), array( 'status' => 400 ) );
+        $qty = 1;
+        if ( preg_match( '/(\d+)/', $cleaned, $matches ) ) {
+            $qty = max( 1, (int) $matches[1] );
         }
 
-        $parser = new Parser( new Family_Detector(), new Logger() );
-        $lines  = $parser->parse_transcript( $transcript );
+        $candidates = array();
 
-        return new WP_REST_Response( array( 'lines' => $lines ) );
+        if ( '' !== $cleaned ) {
+            $results = $this->search->search( $cleaned, 1, 5 );
+
+            foreach ( $results as $result ) {
+                $candidates[] = array(
+                    'product_id' => $result['id'],
+                    'qty'        => $qty,
+                    'unit'       => 'pcs',
+                    'score'      => 0.5,
+                );
+            }
+        }
+
+        $response = array(
+            'lines' => array(
+                array(
+                    'raw'        => $cleaned,
+                    'family'     => null,
+                    'confidence' => 0.5,
+                    'missing'    => array(),
+                    'candidates' => $candidates,
+                ),
+            ),
+        );
+
+        return rest_ensure_response( $response );
     }
 
-    public function handle_ocr_extract( WP_REST_Request $request ) {
-        $files = $request->get_file_params();
+    public function handle_lines_add( WP_REST_Request $request ) {
+        $lines = $request->get_param( 'lines' );
 
-        if ( empty( $files ) ) {
-            return new WP_Error( 'missing_file', __( 'No file provided.', 'dinlogic-ai-order-widget' ), array( 'status' => 400 ) );
+        if ( ! is_array( $lines ) ) {
+            return new WP_Error( 'invalid_lines', __( 'Nieprawidłowe dane.', 'dinlogic-ai-order-widget' ), array( 'status' => 400 ) );
         }
 
-        $ocr    = new OCR( new Logger() );
-        $result = $ocr->extract_text( $files );
-
-        if ( is_wp_error( $result ) ) {
-            return $result;
+        if ( null === WC()->cart ) {
+            wc_load_cart();
         }
 
-        return new WP_REST_Response( $result );
+        if ( empty( WC()->cart ) ) {
+            return new WP_Error( 'cart_unavailable', __( 'Koszyk niedostępny.', 'dinlogic-ai-order-widget' ), array( 'status' => 500 ) );
+        }
+
+        $added = 0;
+
+        foreach ( $lines as $line ) {
+            $product_id = isset( $line['product_id'] ) ? absint( $line['product_id'] ) : 0;
+            $qty        = isset( $line['qty'] ) ? max( 1, absint( $line['qty'] ) ) : 1;
+            $variation  = isset( $line['variation'] ) && is_array( $line['variation'] ) ? $line['variation'] : array();
+
+            if ( ! $product_id ) {
+                continue;
+            }
+
+            $result = WC()->cart->add_to_cart( $product_id, $qty, 0, $variation );
+
+            if ( false !== $result ) {
+                $added += $qty;
+            }
+        }
+
+        return rest_ensure_response(
+            array(
+                'ok'    => true,
+                'added' => $added,
+            )
+        );
+    }
+
+    public function handle_ocr_extract() {
+        return new WP_Error( 'not_implemented', __( 'Endpoint niezaimplementowany.', 'dinlogic-ai-order-widget' ), array( 'status' => 501 ) );
+    }
+
+    public function check_nonce( WP_REST_Request $request ) {
+        $headers = $request->get_headers();
+        $nonce   = isset( $headers['x-wp-nonce'][0] ) ? $headers['x-wp-nonce'][0] : '';
+
+        if ( ! $nonce ) {
+            return new WP_Error( 'rest_forbidden', __( 'Brak uprawnień.', 'dinlogic-ai-order-widget' ), array( 'status' => 403 ) );
+        }
+
+        if ( ! wp_verify_nonce( $nonce, 'wp_rest' ) ) {
+            return new WP_Error( 'rest_forbidden', __( 'Brak uprawnień.', 'dinlogic-ai-order-widget' ), array( 'status' => 403 ) );
+        }
+
+        return true;
     }
 }

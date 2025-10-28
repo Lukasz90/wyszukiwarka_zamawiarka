@@ -1,45 +1,54 @@
 <?php
-namespace Dinlogic\AIW;
-
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-class Parser {
-    protected $detector;
-    protected $logger;
+class Dinlogic_AIW_Parser {
 
-    public function __construct( Family_Detector $detector, Logger $logger ) {
-        $this->detector = $detector;
-        $this->logger   = $logger;
-    }
+    /**
+     * Reduce repeated sequences and characters from text inputs.
+     *
+     * @param string $text
+     * @return string
+     */
+    public function dedupe_text( $text ) {
+        $text = (string) $text;
+        $text = wp_unslash( $text );
 
-    public function parse_transcript( $transcript ) {
-        $lines   = preg_split( '/\r?\n|[\.;]/', $transcript );
-        $results = array();
+        // Collapse triple or longer repeated characters (e.g. coool -> cool).
+        $text = preg_replace( '/([\p{L}])\1{2,}/u', '$1$1', $text );
 
-        foreach ( $lines as $line ) {
-            $clean = trim( $line );
+        // Collapse glued words like "stycznikstycznik".
+        $text = preg_replace_callback(
+            '/([\p{L}]{3,})\1+/u',
+            function ( $matches ) {
+                return $matches[1];
+            },
+            $text
+        );
 
-            if ( '' === $clean ) {
+        // Normalize whitespace.
+        $text = preg_replace( '/\s+/u', ' ', $text );
+        $text = trim( $text );
+
+        if ( '' === $text ) {
+            return '';
+        }
+
+        $words   = preg_split( '/\s+/u', $text );
+        $cleaned = array();
+
+        foreach ( $words as $word ) {
+            if ( '' === $word ) {
                 continue;
             }
 
-            $families = $this->detector->detect( $clean );
-
-            $results[] = array(
-                'raw'        => $clean,
-                'family'     => isset( $families[0] ) ? $families[0]['family'] : null,
-                'confidence' => isset( $families[0] ) ? $families[0]['confidence'] : 0,
-                'missing'    => array(),
-                'candidates' => array(),
-            );
+            $last = end( $cleaned );
+            if ( ! $last || mb_strtolower( $last ) !== mb_strtolower( $word ) ) {
+                $cleaned[] = $word;
+            }
         }
 
-        if ( empty( $results ) ) {
-            $this->logger->log( 'Parser: no lines extracted', array( 'transcript' => $transcript ) );
-        }
-
-        return $results;
+        return implode( ' ', $cleaned );
     }
 }

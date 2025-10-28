@@ -1,0 +1,165 @@
+.aiw-widget {
+    border: 1px solid #d7d7d7;
+    border-radius: 8px;
+    padding: 16px;
+    font-family: inherit;
+    background: #fff;
+    max-width: 760px;
+    margin: 0 auto;
+}
+
+.aiw-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.aiw-tab {
+    flex: 1 1 auto;
+    padding: 8px 12px;
+    background: #f0f0f0;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.aiw-tab.is-active {
+    background: #1e73be;
+    color: #fff;
+}
+
+.aiw-message {
+    min-height: 20px;
+    margin-bottom: 12px;
+    font-size: 0.95rem;
+}
+
+.aiw-message[data-type="success"] {
+    color: #1d7a34;
+}
+
+.aiw-message[data-type="error"] {
+    color: #c0392b;
+}
+
+.aiw-panels {
+    display: block;
+}
+
+.aiw-panel {
+    display: none;
+}
+
+.aiw-panel.is-active {
+    display: block;
+}
+
+.aiw-search-form {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.aiw-search-input {
+    flex: 1 1 auto;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+}
+
+.aiw-button {
+    background: #1e73be;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 14px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.aiw-button:hover,
+.aiw-button:focus {
+    background: #155a94;
+    outline: none;
+}
+
+.aiw-results {
+    display: grid;
+    gap: 12px;
+}
+
+.aiw-result {
+    border: 1px solid #e2e2e2;
+    border-radius: 6px;
+    padding: 12px;
+    display: grid;
+    grid-template-columns: 80px 1fr;
+    gap: 12px;
+    align-items: center;
+}
+
+.aiw-result-thumb {
+    width: 80px;
+    height: 80px;
+    object-fit: contain;
+    border-radius: 4px;
+    background: #fafafa;
+}
+
+.aiw-result-title {
+    font-weight: 600;
+}
+
+.aiw-result-meta {
+    grid-column: 2 / span 1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: #555;
+}
+
+.aiw-result-qty {
+    grid-column: 2 / span 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.aiw-qty-input {
+    width: 70px;
+    padding: 6px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.aiw-empty {
+    padding: 16px;
+    text-align: center;
+    color: #666;
+    border: 1px dashed #ccc;
+    border-radius: 6px;
+}
+
+.aiw-voice-controls {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.aiw-transcript {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    font-family: inherit;
+}
+
+.aiw-interim {
+    min-height: 18px;
+    margin-bottom: 8px;
+    color: #555;
+    font-style: italic;
+}

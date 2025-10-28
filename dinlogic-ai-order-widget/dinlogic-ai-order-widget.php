@@ -1,97 +1,85 @@
 <?php
 /**
  * Plugin Name: Dinlogic AI Order Widget
- * Description: AI-assisted ordering widget for WooCommerce combining search, voice, and OCR workflows.
- * Version: 0.1.0
+ * Description: Prosty widget zamówień dla WooCommerce z wyszukiwaniem i obsługą głosu.
+ * Version: 0.2.0
  * Author: Dinlogic
  * Text Domain: dinlogic-ai-order-widget
- * Domain Path: /languages
  */
 
-define( 'DINLOGIC_AIW_VERSION', '0.1.0' );
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
+
+define( 'DINLOGIC_AIW_VERSION', '0.2.0' );
 define( 'DINLOGIC_AIW_PATH', plugin_dir_path( __FILE__ ) );
 define( 'DINLOGIC_AIW_URL', plugin_dir_url( __FILE__ ) );
 
-spl_autoload_register( function ( $class ) {
-    $prefix = 'Dinlogic\\AIW\\';
-
-    if ( 0 !== strpos( $class, $prefix ) ) {
-        return;
-    }
-
-    $relative = substr( $class, strlen( $prefix ) );
-    $relative = str_replace( '\\', '/', $relative );
-    $relative = str_replace( '_', '-', $relative );
-
-    $segments   = explode( '/', $relative );
-    $class_slug = strtolower( array_pop( $segments ) );
-    $subpath    = '';
-
-    if ( ! empty( $segments ) ) {
-        $subpath = strtolower( implode( '/', $segments ) ) . '/';
-    }
-
-    $locations = array(
-        DINLOGIC_AIW_PATH . 'inc/' . $subpath . 'class-' . $class_slug . '.php',
-        DINLOGIC_AIW_PATH . 'admin/' . $subpath . 'class-' . $class_slug . '.php',
-    );
-
-    foreach ( $locations as $file ) {
-        if ( is_readable( $file ) ) {
-            require_once $file;
-            return;
-        }
-    }
-} );
-
-require_once DINLOGIC_AIW_PATH . 'inc/helpers.php';
+require_once DINLOGIC_AIW_PATH . 'inc/class-search.php';
+require_once DINLOGIC_AIW_PATH . 'inc/class-parser.php';
+require_once DINLOGIC_AIW_PATH . 'inc/class-rest.php';
 
 add_action( 'plugins_loaded', function () {
-    load_plugin_textdomain( 'dinlogic-ai-order-widget', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
-
     if ( ! class_exists( 'WooCommerce' ) ) {
         return;
     }
 
-    $rest = new Dinlogic\AIW\REST();
+    $rest = new Dinlogic_AIW_REST( new Dinlogic_AIW_Search(), new Dinlogic_AIW_Parser() );
     $rest->init();
-
-    if ( is_admin() ) {
-        $settings = new Dinlogic\AIW\Settings_Page();
-        $settings->init();
-    }
 } );
 
-add_shortcode( 'ai_order_widget', function () {
-    wp_enqueue_script( 'dinlogic-aiw-widget', DINLOGIC_AIW_URL . 'public/build/widget.js', array(), DINLOGIC_AIW_VERSION, true );
-    wp_enqueue_style( 'dinlogic-aiw-widget', DINLOGIC_AIW_URL . 'public/build/widget.css', array(), DINLOGIC_AIW_VERSION );
+function dinlogic_aiw_enqueue_assets() {
+    if ( ! class_exists( 'WooCommerce' ) ) {
+        return;
+    }
+
+    wp_register_script(
+        'dinlogic-aiw-widget',
+        DINLOGIC_AIW_URL . 'public/build/widget.js',
+        array(),
+        DINLOGIC_AIW_VERSION,
+        true
+    );
+
+    wp_register_style(
+        'dinlogic-aiw-widget',
+        DINLOGIC_AIW_URL . 'public/build/widget.css',
+        array(),
+        DINLOGIC_AIW_VERSION
+    );
+}
+add_action( 'init', 'dinlogic_aiw_enqueue_assets' );
+
+function dinlogic_aiw_shortcode() {
+    if ( ! class_exists( 'WooCommerce' ) ) {
+        return '';
+    }
+
+    wp_enqueue_script( 'dinlogic-aiw-widget' );
+    wp_enqueue_style( 'dinlogic-aiw-widget' );
+
+    $i18n = array(
+        'searching'   => __( 'Szukam…', 'dinlogic-ai-order-widget' ),
+        'analyzing'   => __( 'Analizuję…', 'dinlogic-ai-order-widget' ),
+        'noResults'   => __( 'Brak wyników.', 'dinlogic-ai-order-widget' ),
+        'added'       => __( 'Dodano do koszyka', 'dinlogic-ai-order-widget' ),
+        'error'       => __( 'Błąd', 'dinlogic-ai-order-widget' ),
+    );
 
     wp_localize_script(
         'dinlogic-aiw-widget',
         'DinlogicAIWConfig',
         array(
-            'restUrl' => esc_url_raw( rest_url( Dinlogic\AIW\REST::ROUTE_NAMESPACE ) ),
-            'nonce'   => wp_create_nonce( 'wp_rest' ),
+            'restBase' => esc_url_raw( rest_url( Dinlogic_AIW_REST::ROUTE_NAMESPACE ) ),
+            'nonce'    => wp_create_nonce( 'wp_rest' ),
+            'currency' => get_woocommerce_currency_symbol(),
+            'i18n'     => $i18n,
         )
     );
 
     ob_start();
-    echo '<div id="dinlogic-ai-order-widget" class="dinlogic-aiw-widget" aria-live="polite"></div>';
+    echo '<div class="aiw-widget" aria-live="polite"></div>';
 
     return ob_get_clean();
-} );
-
-add_action( 'init', function () {
-    if ( ! function_exists( 'register_block_type' ) ) {
-        return;
-    }
-
-    register_block_type(
-        DINLOGIC_AIW_PATH . 'blocks',
-        array(
-            'render_callback' => function () {
-                return do_shortcode( '[ai_order_widget]' );
-            },
-        )
-    );
-} );
+}
+add_shortcode( 'ai_order_widget', 'dinlogic_aiw_shortcode' );
