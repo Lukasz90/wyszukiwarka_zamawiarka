@@ -8,27 +8,6 @@
     margin: 0 auto;
 }
 
-.aiw-tabs {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 12px;
-}
-
-.aiw-tab {
-    flex: 1 1 auto;
-    padding: 8px 12px;
-    background: #f0f0f0;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-weight: 600;
-}
-
-.aiw-tab.is-active {
-    background: #1e73be;
-    color: #fff;
-}
-
 .aiw-message {
     min-height: 20px;
     margin-bottom: 12px;
@@ -43,29 +22,65 @@
     color: #c0392b;
 }
 
-.aiw-panels {
-    display: block;
-}
-
-.aiw-panel {
-    display: none;
-}
-
-.aiw-panel.is-active {
-    display: block;
-}
-
 .aiw-search-form {
     display: flex;
     gap: 8px;
+    align-items: stretch;
+    flex-wrap: wrap;
     margin-bottom: 12px;
 }
 
+.aiw-input-wrap {
+    position: relative;
+    flex: 1 1 280px;
+}
+
 .aiw-search-input {
-    flex: 1 1 auto;
-    padding: 8px;
+    width: 100%;
+    padding: 10px 44px 10px 12px;
     border: 1px solid #ccc;
     border-radius: 6px;
+    font-size: 1rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.aiw-search-input:focus {
+    outline: none;
+    border-color: #1e73be;
+    box-shadow: 0 0 0 2px rgba(30, 115, 190, 0.18);
+}
+
+.aiw-mic-button {
+    position: absolute;
+    top: 50%;
+    right: 6px;
+    transform: translateY(-50%);
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: #1e73be;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.aiw-mic-button span {
+    pointer-events: none;
+}
+
+.aiw-mic-button.is-listening {
+    background: #1e73be;
+    color: #fff;
+}
+
+.aiw-mic-button.is-disabled {
+    color: #aaa;
+    cursor: not-allowed;
 }
 
 .aiw-button {
@@ -76,6 +91,7 @@
     padding: 8px 14px;
     cursor: pointer;
     font-weight: 600;
+    transition: background 0.2s ease;
 }
 
 .aiw-button:hover,
@@ -97,6 +113,11 @@
     grid-template-columns: 80px 1fr;
     gap: 12px;
     align-items: center;
+}
+
+.aiw-result.is-primary {
+    border-color: #1e73be;
+    box-shadow: 0 0 0 2px rgba(30, 115, 190, 0.12);
 }
 
 .aiw-result-thumb {
@@ -142,24 +163,13 @@
     border-radius: 6px;
 }
 
-.aiw-voice-controls {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 12px;
-}
+@media (max-width: 640px) {
+    .aiw-result {
+        grid-template-columns: 60px 1fr;
+    }
 
-.aiw-transcript {
-    width: 100%;
-    padding: 8px;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    margin-bottom: 12px;
-    font-family: inherit;
-}
-
-.aiw-interim {
-    min-height: 18px;
-    margin-bottom: 8px;
-    color: #555;
-    font-style: italic;
+    .aiw-result-thumb {
+        width: 60px;
+        height: 60px;
+    }
 }
