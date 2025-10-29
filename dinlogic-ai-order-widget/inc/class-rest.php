@@ -219,8 +219,7 @@ class Dinlogic_AIW_REST {
     }
 
     public function check_nonce( WP_REST_Request $request ) {
-        $headers = $request->get_headers();
-        $nonce   = isset( $headers['x-wp-nonce'][0] ) ? $headers['x-wp-nonce'][0] : '';
+        $nonce = $request->get_header( 'X-WP-Nonce' );
 
         if ( ! $nonce ) {
             return new WP_Error( 'rest_forbidden', __( 'Brak uprawnień.', 'dinlogic-ai-order-widget' ), array( 'status' => 403 ) );
