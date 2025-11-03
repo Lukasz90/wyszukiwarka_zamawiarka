@@ -104,6 +104,12 @@ add_action( 'init', function () {
         return;
     }
 
+    $block_metadata = DINLOGIC_AIW_PATH . 'blocks/block.json';
+
+    if ( ! file_exists( $block_metadata ) ) {
+        return;
+    }
+
     register_block_type(
         DINLOGIC_AIW_PATH . 'blocks',
         array(

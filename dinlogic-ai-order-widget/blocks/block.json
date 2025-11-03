@@ -1,0 +1,17 @@
+{
+  "apiVersion": 2,
+  "name": "dinlogic/ai-order-widget",
+  "title": "Dinlogic AI Order Widget",
+  "category": "widgets",
+  "icon": "cart",
+  "description": "Wyświetla widżet szybkich zamówień Dinlogic AI.",
+  "keywords": [
+    "dinlogic",
+    "zamówienia",
+    "ai"
+  ],
+  "supports": {
+    "html": false
+  },
+  "textdomain": "dinlogic-ai-order-widget"
+}
