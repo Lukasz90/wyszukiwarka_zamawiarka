@@ -16,8 +16,20 @@ class REST {
     /** @var Search */
     protected $search;
 
-    public function __construct( Search $search = null ) {
+    public function __construct( ?Search $search = null ) {
         $this->search = $search ? $search : new Search();
+    }
+
+    protected function ensure_cart() {
+        if ( function_exists( 'wc_load_cart' ) ) {
+            wc_load_cart();
+            return;
+        }
+
+        if ( null === WC()->cart ) {
+            include_once WC_ABSPATH . 'includes/class-wc-cart.php';
+            WC()->cart = new \WC_Cart();
+        }
     }
 
     public function init() {
@@ -93,7 +105,11 @@ class REST {
             return new WP_Error( 'invalid_nonce', __( 'Invalid security token.', 'dinlogic-ai-order-widget' ), array( 'status' => 403 ) );
         }
 
-        return current_user_can( 'read' );
+        if ( is_user_logged_in() ) {
+            return current_user_can( 'read' );
+        }
+
+        return true;
     }
 
     public function handle_search( WP_REST_Request $request ) {
@@ -107,6 +123,8 @@ class REST {
     }
 
     public function handle_cart_add( WP_REST_Request $request ) {
+        $this->ensure_cart();
+
         $params     = $request->get_json_params();
         $product_id = isset( $params['product_id'] ) ? (int) $params['product_id'] : 0;
         $qty        = isset( $params['qty'] ) ? max( 1, (int) $params['qty'] ) : 1;
@@ -141,6 +159,8 @@ class REST {
     }
 
     public function handle_lines_add( WP_REST_Request $request ) {
+        $this->ensure_cart();
+
         $params = $request->get_json_params();
 
         if ( empty( $params['lines'] ) || ! is_array( $params['lines'] ) ) {

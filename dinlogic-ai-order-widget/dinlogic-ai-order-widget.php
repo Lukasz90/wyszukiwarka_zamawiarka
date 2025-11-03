@@ -53,8 +53,12 @@ add_shortcode( 'ai_order_widget', function () {
         'dinlogic-aiw-widget',
         'DinlogicAIWConfig',
         array(
-            'restUrl' => esc_url_raw( rest_url( Dinlogic\AIW\REST::ROUTE_NAMESPACE ) ),
-            'nonce'   => wp_create_nonce( 'wp_rest' ),
+            'restUrl'         => esc_url_raw( rest_url( Dinlogic\AIW\REST::ROUTE_NAMESPACE ) ),
+            'nonce'           => wp_create_nonce( 'wp_rest' ),
+            'currency'        => get_woocommerce_currency(),
+            'currencySymbol'  => get_woocommerce_currency_symbol(),
+            'locale'          => str_replace( '_', '-', get_locale() ),
+            'priceDecimals'   => wc_get_price_decimals(),
         )
     );
 
