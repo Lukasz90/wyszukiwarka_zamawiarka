@@ -22,21 +22,37 @@ class Search {
             'limit'        => $per_page,
             'paginate'     => true,
             'page'         => max( 1, $page ),
-            'orderby'      => 'relevance',
-            'order'        => 'DESC',
             'return'       => 'ids',
+            'status'       => array( 'publish' ),
             'stock_status' => array( 'instock', 'onbackorder' ),
             'featured'     => false,
+            's'            => $query,
         );
 
-        if ( function_exists( 'wc_get_container' ) && class_exists( '\\Automattic\\WooCommerce\\Utilities\\StringUtil' ) ) {
-            $args['s'] = $query;
-        } else {
-            $args['search'] = $query;
+        $orderby_args = $this->get_orderby_args();
+
+        if ( ! empty( $orderby_args ) ) {
+            $args = array_merge( $args, $orderby_args );
         }
 
         $products = new \WC_Product_Query( $args );
         $result   = $products->get_products();
+
+        if ( is_wp_error( $result ) ) {
+            $fallback_args = array_merge(
+                $args,
+                array(
+                    'orderby' => 'title',
+                    'order'   => 'ASC',
+                )
+            );
+
+            unset( $fallback_args['s'] );
+            $fallback_args['search'] = $query;
+
+            $products = new \WC_Product_Query( $fallback_args );
+            $result   = $products->get_products();
+        }
         $total    = isset( $result['total'] ) ? (int) $result['total'] : count( $result );
         $items    = isset( $result['products'] ) ? $result['products'] : $result;
 
@@ -59,6 +75,20 @@ class Search {
                 'per_page'  => $per_page,
                 'total'     => $total,
             ),
+        );
+    }
+
+    protected function get_orderby_args() {
+        if ( defined( 'WC_VERSION' ) && version_compare( WC_VERSION, '3.7.0', '>=' ) ) {
+            return array(
+                'orderby' => 'relevance',
+                'order'   => 'DESC',
+            );
+        }
+
+        return array(
+            'orderby' => 'title',
+            'order'   => 'ASC',
         );
     }
 }
