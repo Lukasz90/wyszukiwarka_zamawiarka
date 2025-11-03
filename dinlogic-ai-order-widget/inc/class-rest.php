@@ -45,6 +45,7 @@ class REST {
                     'q'        => array( 'type' => 'string' ),
                     'page'     => array( 'type' => 'integer', 'default' => 1 ),
                     'per_page' => array( 'type' => 'integer', 'default' => 10 ),
+                    'debug'    => array( 'type' => 'boolean', 'default' => false ),
                 ),
                 'permission_callback' => '__return_true',
                 'callback'            => array( $this, 'handle_search' ),
@@ -117,7 +118,16 @@ class REST {
         $page     = sanitize_int( $request->get_param( 'page' ), 1 );
         $per_page = max( 1, min( 50, sanitize_int( $request->get_param( 'per_page' ), 10 ) ) );
 
-        $results = $this->search->search( $q, $page, $per_page );
+        $requested_debug = rest_sanitize_boolean( $request->get_param( 'debug' ) );
+        $allow_debug     = $requested_debug && current_user_can( 'manage_options' );
+
+        $results = $this->search->search( $q, $page, $per_page, $allow_debug );
+
+        if ( $requested_debug && ! $allow_debug ) {
+            $results['debug'] = array(
+                'notice' => __( 'Debug data is available only to administrators.', 'dinlogic-ai-order-widget' ),
+            );
+        }
 
         return new WP_REST_Response( $results );
     }

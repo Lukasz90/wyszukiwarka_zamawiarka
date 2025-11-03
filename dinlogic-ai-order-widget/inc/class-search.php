@@ -6,8 +6,16 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 class Search {
-    public function search( $query, $page = 1, $per_page = 10 ) {
-        $query = is_string( $query ) ? \wc_clean( $query ) : '';
+    /** @var Logger */
+    protected $logger;
+
+    public function __construct( ?Logger $logger = null ) {
+        $this->logger = $logger ? $logger : new Logger();
+    }
+
+    public function search( $query, $page = 1, $per_page = 10, $debug = false ) {
+        $raw_query = $query;
+        $query     = is_string( $query ) ? \wc_clean( $query ) : '';
 
         if ( '' === $query ) {
             return array(
@@ -20,12 +28,42 @@ class Search {
             );
         }
 
+        $debug_data = array();
+
+        if ( $debug ) {
+            $debug_data['query'] = array(
+                'raw'       => $raw_query,
+                'sanitized' => $query,
+                'page'      => (int) $page,
+                'per_page'  => (int) $per_page,
+            );
+        }
+
+        $this->logger->log(
+            'dinlogic_aiw.search.start',
+            array(
+                'raw_query'  => $raw_query,
+                'query'      => $query,
+                'page'       => (int) $page,
+                'per_page'   => (int) $per_page,
+                'debug_flag' => (bool) $debug,
+            )
+        );
+
         $args = array_merge(
             $this->get_base_args( $page, $per_page ),
             $this->get_search_args( $query )
         );
 
-        list( $items, $total ) = $this->execute_query( $args );
+        if ( $debug ) {
+            $debug_data['initial_args'] = $args;
+        }
+
+        list( $items, $total, $context ) = $this->execute_query( $args );
+
+        if ( $debug ) {
+            $debug_data['initial_context'] = $context;
+        }
 
         if ( empty( $items ) ) {
             $fallback_args = array_merge(
@@ -37,7 +75,23 @@ class Search {
                 )
             );
 
-            list( $items, $total ) = $this->execute_query( $fallback_args );
+            $this->logger->log(
+                'dinlogic_aiw.search.fallback',
+                array(
+                    'query' => $query,
+                    'args'  => $fallback_args,
+                )
+            );
+
+            if ( $debug ) {
+                $debug_data['fallback_args'] = $fallback_args;
+            }
+
+            list( $items, $total, $fallback_context ) = $this->execute_query( $fallback_args );
+
+            if ( $debug ) {
+                $debug_data['fallback_context'] = $fallback_context;
+            }
         }
 
         $data = array();
@@ -52,7 +106,7 @@ class Search {
             $data[] = format_product_response( $product );
         }
 
-        return array(
+        $response = array(
             'items'      => $data,
             'pagination' => array(
                 'page'      => $page,
@@ -60,6 +114,22 @@ class Search {
                 'total'     => $total,
             ),
         );
+
+        if ( $debug && $this->can_expose_debug() ) {
+            $response['debug'] = $debug_data;
+        }
+
+        $this->logger->log(
+            'dinlogic_aiw.search.complete',
+            array(
+                'query'          => $query,
+                'count'          => count( $data ),
+                'total'          => (int) $total,
+                'debug_included' => $debug && $this->can_expose_debug(),
+            )
+        );
+
+        return $response;
     }
 
     protected function get_base_args( $page, $per_page ) {
@@ -79,11 +149,11 @@ class Search {
         );
 
         if ( defined( 'WC_VERSION' ) && version_compare( WC_VERSION, '3.7.0', '>=' ) ) {
-            $args['search'] = $query;
+            $args['search']  = $query;
             $args['orderby'] = 'relevance';
             $args['order']   = 'DESC';
         } else {
-            $args['s']      = $query;
+            $args['s']       = $query;
             $args['orderby'] = 'title';
             $args['order']   = 'ASC';
         }
@@ -92,11 +162,44 @@ class Search {
     }
 
     protected function execute_query( $args ) {
-        $products = new \WC_Product_Query( $args );
-        $result   = $products->get_products();
+        global $wpdb;
+
+        $clauses_snapshot = null;
+        $marker           = wp_rand( 1000, 9999 );
+
+        $filter = function ( $clauses, $query ) use ( &$clauses_snapshot, $marker ) {
+            if ( (int) $query->get( 'dinlogic_aiw_marker' ) === $marker ) {
+                $clauses_snapshot = $clauses;
+            }
+
+            return $clauses;
+        };
+
+        add_filter( 'posts_clauses', $filter, 999, 2 );
+
+        $args['dinlogic_aiw_marker'] = $marker;
+
+        try {
+            $products = new \WC_Product_Query( $args );
+            $result   = $products->get_products();
+        } finally {
+            remove_filter( 'posts_clauses', $filter, 999 );
+        }
 
         if ( is_wp_error( $result ) ) {
-            return array( array(), 0 );
+            $this->logger->log(
+                'dinlogic_aiw.search.error',
+                array(
+                    'error_code'    => $result->get_error_code(),
+                    'error_message' => $result->get_error_message(),
+                    'args'          => $args,
+                )
+            );
+
+            $clean_error_args = $args;
+            unset( $clean_error_args['dinlogic_aiw_marker'] );
+
+            return array( array(), 0, array( 'args' => $clean_error_args ) );
         }
 
         if ( isset( $result['products'] ) ) {
@@ -107,6 +210,32 @@ class Search {
             $total = count( $items );
         }
 
-        return array( $items, $total );
+        $clean_args = $args;
+        unset( $clean_args['dinlogic_aiw_marker'] );
+
+        $context = array(
+            'args'       => $clean_args,
+            'clauses'    => $clauses_snapshot,
+            'last_query' => ( isset( $wpdb ) && $wpdb ) ? $wpdb->last_query : null,
+        );
+
+        if ( $this->logger->is_enabled() ) {
+            $this->logger->log(
+                'dinlogic_aiw.search.result',
+                array(
+                    'count'      => count( $items ),
+                    'total'      => (int) $total,
+                    'args'       => $clean_args,
+                    'clauses'    => $clauses_snapshot,
+                    'last_query' => $context['last_query'],
+                )
+            );
+        }
+
+        return array( $items, $total, $context );
+    }
+
+    protected function can_expose_debug() {
+        return current_user_can( 'manage_options' );
     }
 }

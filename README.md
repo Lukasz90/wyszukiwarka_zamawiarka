@@ -26,3 +26,12 @@ Polecenie `npm run build` wygeneruje pliki w katalogu `public/build/`. Repozytor
 ## Rozwój
 
 Projekt jest w fazie aktywnego rozwoju. W briefie produktu znajdują się wymagania MVP, roadmapa oraz decyzje produktowe, które należy uwzględniać podczas implementacji kolejnych funkcji.
+
+## Debugowanie wyszukiwania
+
+W celu diagnozowania problemów z wyszukiwaniem możesz:
+
+- tymczasowo włączyć logowanie: `wp option update dinlogic_aiw_logging_enabled 1` (logi trafią do standardowego dziennika PHP),
+- dodać parametr `debug=1` do zapytania REST, np. `/wp-json/aiw/v1/search?q=przewód&debug=1`; dodatkowe dane debugowe otrzymają wyłącznie administratorzy (`manage_options`).
+
+Aby wyłączyć logi po zakończeniu analizy, wykonaj `wp option update dinlogic_aiw_logging_enabled 0`.
