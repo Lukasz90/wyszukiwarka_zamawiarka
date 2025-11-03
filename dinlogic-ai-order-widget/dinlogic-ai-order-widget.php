@@ -17,13 +17,33 @@ spl_autoload_register( function ( $class ) {
         return;
     }
 
-    $parts    = explode( '\\', $class );
+    $parts = explode( '\\', $class );
     array_shift( $parts );
-    $relative = strtolower( implode( '-', $parts ) );
-    $file     = DINLOGIC_AIW_PATH . 'inc/class-' . $relative . '.php';
 
-    if ( is_readable( $file ) ) {
-        require_once $file;
+    $relative = strtolower(
+        implode(
+            '-',
+            array_map(
+                function ( $segment ) {
+                    return str_replace( '_', '-', $segment );
+                },
+                $parts
+            )
+        )
+    );
+
+    $locations = array(
+        'inc/class-' . $relative . '.php',
+        'admin/class-' . $relative . '.php',
+    );
+
+    foreach ( $locations as $relative_path ) {
+        $file = DINLOGIC_AIW_PATH . $relative_path;
+
+        if ( is_readable( $file ) ) {
+            require_once $file;
+            return;
+        }
     }
 } );
 
