@@ -17,25 +17,34 @@ spl_autoload_register( function ( $class ) {
         return;
     }
 
-    $parts = explode( '\\', $class );
-    array_shift( $parts );
+    $relative = substr( $class, strlen( 'Dinlogic\\AIW\\' ) );
 
-    $relative = strtolower(
-        implode(
-            '-',
-            array_map(
-                function ( $segment ) {
-                    return str_replace( '_', '-', $segment );
-                },
-                $parts
-            )
-        )
+    if ( ! $relative ) {
+        return;
+    }
+
+    $relative = str_replace( '\\', '/', $relative );
+
+    $segments = array_map(
+        function ( $segment ) {
+            return strtolower( str_replace( '_', '-', $segment ) );
+        },
+        explode( '/', $relative )
     );
 
-    $locations = array(
-        'inc/class-' . $relative . '.php',
-        'admin/class-' . $relative . '.php',
-    );
+    $filename = array_pop( $segments );
+
+    $subpath = '';
+
+    if ( ! empty( $segments ) ) {
+        $subpath = trailingslashit( implode( '/', $segments ) );
+    }
+
+    $locations = array();
+
+    foreach ( array( 'inc', 'admin' ) as $directory ) {
+        $locations[] = trailingslashit( $directory ) . $subpath . 'class-' . $filename . '.php';
+    }
 
     foreach ( $locations as $relative_path ) {
         $file = DINLOGIC_AIW_PATH . $relative_path;
@@ -49,9 +58,11 @@ spl_autoload_register( function ( $class ) {
 
 require_once DINLOGIC_AIW_PATH . 'inc/helpers.php';
 
-add_action( 'plugins_loaded', function () {
+add_action( 'init', function () {
     load_plugin_textdomain( 'dinlogic-ai-order-widget', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
+} );
 
+add_action( 'plugins_loaded', function () {
     if ( ! class_exists( 'WooCommerce' ) ) {
         return;
     }
