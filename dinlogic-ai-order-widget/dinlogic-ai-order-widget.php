@@ -84,7 +84,7 @@ add_shortcode( 'ai_order_widget', function () {
         'dinlogic-aiw-widget',
         'DinlogicAIWConfig',
         array(
-            'restUrl'         => esc_url_raw( rest_url( Dinlogic\AIW\REST::ROUTE_NAMESPACE ) ),
+            'restUrl'         => esc_url_raw( untrailingslashit( rest_url( Dinlogic\AIW\REST::ROUTE_NAMESPACE ) ) ),
             'nonce'           => wp_create_nonce( 'wp_rest' ),
             'currency'        => get_woocommerce_currency(),
             'currencySymbol'  => get_woocommerce_currency_symbol(),
