@@ -22,11 +22,16 @@ function sanitize_float( $value, $default = 0.0 ) {
 }
 
 function format_product_response( \WC_Product $product ) {
+    $regular_price = $product->get_regular_price();
+    $sale_price    = $product->get_sale_price();
+
     $data = array(
         'id'           => $product->get_id(),
         'name'         => $product->get_name(),
         'sku'          => $product->get_sku(),
         'price'        => wc_get_price_to_display( $product ),
+        'regular_price' => '' !== $regular_price ? (float) wc_get_price_to_display( $product, array( 'price' => $regular_price ) ) : null,
+        'sale_price'    => '' !== $sale_price ? (float) wc_get_price_to_display( $product, array( 'price' => $sale_price ) ) : null,
         'unit'         => $product->get_meta( '_unit', true ),
         'stock_status' => $product->get_stock_status(),
         'thumb'        => get_the_post_thumbnail_url( $product->get_id(), 'thumbnail' ),

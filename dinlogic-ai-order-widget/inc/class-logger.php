@@ -29,4 +29,8 @@ class Logger {
 
         error_log( $entry );
     }
+
+    public function is_enabled() {
+        return $this->enabled;
+    }
 }

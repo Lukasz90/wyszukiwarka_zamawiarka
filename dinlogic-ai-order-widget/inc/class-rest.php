@@ -16,8 +16,20 @@ class REST {
     /** @var Search */
     protected $search;
 
-    public function __construct( Search $search = null ) {
+    public function __construct( ?Search $search = null ) {
         $this->search = $search ? $search : new Search();
+    }
+
+    protected function ensure_cart() {
+        if ( function_exists( 'wc_load_cart' ) ) {
+            wc_load_cart();
+            return;
+        }
+
+        if ( null === WC()->cart ) {
+            include_once WC_ABSPATH . 'includes/class-wc-cart.php';
+            WC()->cart = new \WC_Cart();
+        }
     }
 
     public function init() {
@@ -33,6 +45,7 @@ class REST {
                     'q'        => array( 'type' => 'string' ),
                     'page'     => array( 'type' => 'integer', 'default' => 1 ),
                     'per_page' => array( 'type' => 'integer', 'default' => 10 ),
+                    'debug'    => array( 'type' => 'boolean', 'default' => false ),
                 ),
                 'permission_callback' => '__return_true',
                 'callback'            => array( $this, 'handle_search' ),
@@ -93,7 +106,11 @@ class REST {
             return new WP_Error( 'invalid_nonce', __( 'Invalid security token.', 'dinlogic-ai-order-widget' ), array( 'status' => 403 ) );
         }
 
-        return current_user_can( 'read' );
+        if ( is_user_logged_in() ) {
+            return current_user_can( 'read' );
+        }
+
+        return true;
     }
 
     public function handle_search( WP_REST_Request $request ) {
@@ -101,12 +118,23 @@ class REST {
         $page     = sanitize_int( $request->get_param( 'page' ), 1 );
         $per_page = max( 1, min( 50, sanitize_int( $request->get_param( 'per_page' ), 10 ) ) );
 
-        $results = $this->search->search( $q, $page, $per_page );
+        $requested_debug = rest_sanitize_boolean( $request->get_param( 'debug' ) );
+        $allow_debug     = $requested_debug && current_user_can( 'manage_options' );
+
+        $results = $this->search->search( $q, $page, $per_page, $allow_debug );
+
+        if ( $requested_debug && ! $allow_debug ) {
+            $results['debug'] = array(
+                'notice' => __( 'Debug data is available only to administrators.', 'dinlogic-ai-order-widget' ),
+            );
+        }
 
         return new WP_REST_Response( $results );
     }
 
     public function handle_cart_add( WP_REST_Request $request ) {
+        $this->ensure_cart();
+
         $params     = $request->get_json_params();
         $product_id = isset( $params['product_id'] ) ? (int) $params['product_id'] : 0;
         $qty        = isset( $params['qty'] ) ? max( 1, (int) $params['qty'] ) : 1;
@@ -141,6 +169,8 @@ class REST {
     }
 
     public function handle_lines_add( WP_REST_Request $request ) {
+        $this->ensure_cart();
+
         $params = $request->get_json_params();
 
         if ( empty( $params['lines'] ) || ! is_array( $params['lines'] ) ) {
